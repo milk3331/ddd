@@ -35,13 +35,13 @@ from aiogram.types import (
 # ============================================================
 
 # ВСТАВЬ СЮДА СВОЙ НОВЫЙ ТОКЕН ОТ BOTFATHER!
-BOT_TOKEN = "8806340628:AAFODmsRz157x4cP0CHmYGyZwtAiyhBKWuA"
+BOT_TOKEN = "9299466432:AAEAw1BZDyYEISAB4f3TPSBDsK0wQ0JV1ss"
 
 OFFER_DURATION_HOURS = 6
 PARALLEL = True
 KEEPALIVE_SECONDS = 20
 DEFAULT_LANGUAGE = "ru"
-DEFAULT_BUYER = "@xmoys"
+DEFAULT_BUYER = "@vimqwx"
 ESCROW_RESERVE_HOURS = 24
 ACCEPT_FIRST = False
 
@@ -53,7 +53,7 @@ STARS_PREMIUM_EMOJI_ID = "5848021027782661221"
 GRAM_PREMIUM_EMOJI_ID = "5318901904686754959"
 
 # ID администратора бота
-ADMIN_ID = 8318557688
+ADMIN_ID = 8911611205
 
 # Платный доступ
 DB_PATH = "access.db"  # Для BotHost ставим локальный путь
