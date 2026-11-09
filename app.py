@@ -342,9 +342,18 @@ def create_accept_text(data):
     )
 
 def create_accept_keyboard(data):
+    # 1. Кнопка профиля покупателя
     buyer = str(data.get("buyer") or "").lstrip("@")
-    url = f"tg://user?id={buyer}" if buyer.isdigit() else "https://t.me/" + buyer
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Профиль покупателя", url=url)]])
+    buyer_url = f"tg://user?id={buyer}" if buyer.isdigit() else "https://t.me/" + buyer
+    
+    # 2. Кнопка передачи NFT (берет ссылку на подарок из оффера)
+    nft_url = data["nft"]["url"]
+
+    # Возвращаем две кнопки: сверху профиль, снизу передача
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👤 Профиль покупателя", url=buyer_url)],
+        [InlineKeyboardButton(text="🎁 Подарить / Передать NFT", url=nft_url)]
+    ])
 
 def language_from_callback(data):
     parts = data.split(":")
